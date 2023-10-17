@@ -1,0 +1,122 @@
+[
+    {
+        "text": "Hello, I am John Doe from ABC Inc in the USA. You can reach me at +123 456 7890. Our budget is around 20k - 40k AED.",
+        "entities": [
+            {
+                "start": 11,
+                "end": 19,
+                "label": "NAME"
+            },
+            {
+                "start": 31,
+                "end": 38,
+                "label": "COMPANY"
+            },
+            {
+                "start": 67,
+                "end": 81,
+                "label": "PHONE"
+            },
+            {
+                "start": 101,
+                "end": 126,
+                "label": "BUDGET"
+            }
+        ]
+    },
+    {
+        "text": "Hi, my name is Sarah Hassan, and I work at XYZ Corp. We have a budget of 70k USD. Contact me at +987 654 3210.",
+        "entities": [
+            {
+                "start": 20,
+                "end": 31,
+                "label": "NAME"
+            },
+            {
+                "start": 47,
+                "end": 56,
+                "label": "COMPANY"
+            },
+            {
+                "start": 100,
+                "end": 112,
+                "label": "PHONE"
+            },
+            {
+                "start": 81,
+                "end": 87,
+                "label": "BUDGET"
+            }
+        ]
+    },
+    {
+        "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Our budget is 30k - 50k AED. Contact Mary Smith at +971 123 4567.",
+        "entities": [
+            {
+                "start": 147,
+                "end": 157,
+                "label": "NAME"
+            },
+            {
+                "start": 174,
+                "end": 183,
+                "label": "PHONE"
+            },
+            {
+                "start": 113,
+                "end": 123,
+                "label": "BUDGET"
+            }
+        ]
+    },
+    {
+        "text": "Greetings from John Smith, CEO of PQR Ltd. Our company's budget is 60k - 80k AED. You can contact me at +555 123 4567.",
+        "entities": [
+            {
+                "start": 15,
+                "end": 24,
+                "label": "NAME"
+            },
+            {
+                "start": 37,
+                "end": 44,
+                "label": "COMPANY"
+            },
+            {
+                "start": 91,
+                "end": 104,
+                "label": "PHONE"
+            },
+            {
+                "start": 121,
+                "end": 131,
+                "label": "BUDGET"
+            }
+        ]
+    },
+    {
+        "text": "I'm Mark Johnson, and I represent MNO Group. Our budget is 45k - 65k USD. Contact us at +111 987 6543.",
+        "entities": [
+            {
+                "start": 3,
+                "end": 14,
+                "label": "NAME"
+            },
+            {
+                "start": 34,
+                "end": 44,
+                "label": "COMPANY"
+            },
+            {
+                "start": 79,
+                "end": 90,
+                "label": "PHONE"
+            },
+            {
+                "start": 66,
+                "end": 76,
+                "label": "BUDGET"
+            }
+        ]
+    }
+]

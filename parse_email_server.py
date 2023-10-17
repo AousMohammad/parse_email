@@ -1,8 +1,12 @@
 import imaplib
 from email import message_from_bytes
 import mysql.connector
-import re
 from decouple import config
+import spacy
+import re
+import logging
+
+logging.basicConfig(filename='email_processing.log', level=logging.INFO)
 
 IMAP_SERVER = config('IMAP_SERVER')
 IMAP_PORT = int(config('IMAP_PORT'))
@@ -13,8 +17,19 @@ DB_USER = config('DB_USER')
 DB_PASS = config('DB_PASS')
 DB_NAME = config('DB_NAME')
 
+
+nlp = spacy.blank("en")
+ner = nlp.add_pipe("ner")
+labels = ["NAME", "COMPANY", "PHONE", "BUDGET", "COUNTRY"]
+
+for label in labels:
+    ner.add_label(label)
+
+# Load your custom NER model
+nlp.from_disk("astudio_email_parser")
+nlp.initialize()
+
 def fetch_emails():
-    # Use the provided IMAP server and port details
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
     mail.login(IMAP_USER, IMAP_PASS)
     mail.select('inbox')
@@ -27,23 +42,20 @@ def fetch_emails():
 
             sender = email_message.get('From')
             subject = email_message.get('Subject')
-            
+
             content = None
             email_match = re.search(r'<([^>]+)>', sender)
             if email_match:
                 sender = email_match.group(1)
-            # Check if email is multipart
             if email_message.is_multipart():
                 for part in email_message.walk():
                     content_type = part.get_content_type()
                     content_disposition = str(part.get('Content-Disposition'))
 
-                    # Only consider parts that are text/plain or text/html and not attachments
                     if "attachment" not in content_disposition and (content_type == "text/plain" or content_type == "text/html"):
                         content = part.get_payload(decode=True).decode('utf-8')
                         break
             else:
-                # If email is not multipart, get the payload directly
                 payload = email_message.get_payload(decode=True)
                 if payload:
                     content = payload.decode('utf-8')
@@ -54,72 +66,63 @@ def fetch_emails():
                 'content': content
             }
 
-# Extract email info
 def extract_email_info(email_text):
-    # Extract phone number
-    phone_pattern = r'Whatsapp:\s*\+(\d{1,15}\s*\d{1,15})'
-    phone = re.search(phone_pattern, email_text)
-    
-    # Extract email
-    # email_pattern = r'From:.*<([\w\.-]+@[\w\.-]+)>'
-    # email = re.search(email_pattern, email_text)
-    
-    # Extract name of sender
-    name_pattern = r'\n([\w\s]+)\nFounder'
-    name = re.search(name_pattern, email_text)
-    
-    # Extract company name
-    company_pattern = r'Founder of ([^\n]+)'
-    company = re.search(company_pattern, email_text)
-    
-    # Extract country
-    country_pattern = r'Founder of [\w\s]+\s*\n([\w\s]+)\nWhatsapp:'
-    country = re.search(country_pattern, email_text)
-    
-    # Extract budget
-    budget_pattern = r'(\d+k-\d+k AED)'
-    budget = re.search(budget_pattern, email_text)
-    
-    # Extract subject
-    # subject_pattern = r'Subject: (.+)\n'
-    # subject = re.search(subject_pattern, email_text)
-    
-    # Store in a dictionary
+    doc = nlp(email_text)
+
     info = {
-        'phone': '+' + phone.group(1).replace(" ", "") if phone else '',
-        'name': name.group(1).strip() if name else '',
-        'company': company.group(1).strip() if company else '',
-        'country': country.group(1).strip() if country else '',
-        'budget': budget.group(1) if budget else '',
+        'phone': '',
+        'name': '',
+        'company': '',
+        'country': '',
+        'budget': '',
     }
-    
+
+    for ent in doc.ents:
+        if ent.label_ == 'PHONE':
+            info['phone'] = ent.text
+        elif ent.label_ == 'COMPANY':
+            info['company'] = ent.text
+        elif ent.label_ == 'COUNTRY':
+            info['country'] = ent.text
+        elif ent.label_ == 'BUDGET':
+            info['budget'] = ent.text
+        elif ent.label_ == 'NAME':
+            info['name'] = ent.text
+
     return info
 
 def store_to_db(data):
-    conn = mysql.connector.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASS,
-        database=DB_NAME
-    )
-    cursor = conn.cursor()
-    
-    insert_query = """
-    INSERT INTO emails (phone, email, name, company, country, budget, subject)
-    VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """
-    cursor.execute(insert_query, (data['phone'], data['email'], data['name'], data['company'], data['country'], data['budget'], data['subject']))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        conn = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASS,
+            database=DB_NAME
+        )
+
+        cursor = conn.cursor()
+
+        insert_query = """
+        INSERT INTO emails (phone, email, name, company, country, budget, subject)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(insert_query, (data['phone'], data['sender'], data['name'], data['company'], data['country'], data['budget'], data['subject']))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+    except mysql.connector.Error as e:
+        logging.error(f"Database error: {str(e)}")
 
 def main():
     for email_data in fetch_emails():
-        print(email_data['content'])
+        print(email_data)
         data = extract_email_info(email_data['content'])
-        data['email'] = email_data['sender']
+        data['sender'] = email_data['sender']
         data['subject'] = email_data['subject']
-        store_to_db(data)
+        print(data)
+        # Uncomment the line below to store data in the database
+        # store_to_db(data)
 
 if __name__ == "__main__":
     main()
