@@ -6,7 +6,9 @@ On the other device, it's a good practice to create a virtual environment to ins
 For example, using virtualenv:
 
 `pip install virtualenv`
+
 `virtualenv my_env`
+
 `source my_env/bin/activate`  # On Windows, use: my_env\Scripts\activate
 
 Install the Requirements:
