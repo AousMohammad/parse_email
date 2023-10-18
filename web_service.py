@@ -23,6 +23,21 @@ WHITELIST_EMAIL = config('WHITELIST_EMAIL')
 
 nlp = en_core_web_sm.load()
 
+def parse_date(email_date):
+    date_formats = [
+        '%Y-%m-%d %H:%M:%S',
+        '%a, %d %b %Y %H:%M:%S %z'
+    ]
+    
+    for date_format in date_formats:
+        try:
+            return datetime.strptime(email_date, date_format)
+        except ValueError:
+            continue
+    
+    logging.error(f"Failed to parse email date: {email_date}")
+    return None
+
 def fetch_emails():
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
     mail.login(IMAP_USER, IMAP_PASS)
@@ -83,12 +98,10 @@ def extract_email_info(email_text, email_date):
     if website_match:
         info['website'] = website_match.group(0)
 
-    try:
-        email_datetime = datetime.strptime(email_date, '%a, %d %b %Y %H:%M:%S %z')
+    email_datetime = parse_date(email_date)
+    if email_datetime:
         info['day_of_lead'] = email_datetime.strftime('%A')
-        info['date'] = email_datetime.strftime('%Y-%m-%d')
-    except ValueError:
-        logging.error(f"Failed to parse email date: {email_date}")
+        info['date'] = email_datetime.strftime('%Y-%m-%d %H:%M:%S')
     
     for ent in doc.ents:
         if ent.label_ == 'CARDINAL' and "k" in ent.text.lower():
