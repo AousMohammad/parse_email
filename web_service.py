@@ -133,7 +133,7 @@ def extract_email_info(email_text, email_date):
 def send_to_api(data):
     payload = {
         'form': {
-            'name': 'Email Lead',
+            'name': f"Email Lead - {data['name']}",
             'company_name': data['company'],
             'first_name': data['first_name'],
             'last_name': data['last_name'],
