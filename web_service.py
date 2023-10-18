@@ -1,12 +1,13 @@
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify
 import imaplib
 from email import message_from_bytes
-import mysql.connector
-from decouple import config
 import spacy
 import re
 import logging
 import en_core_web_sm
+import requests
+from decouple import config
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -16,11 +17,8 @@ IMAP_SERVER = config('IMAP_SERVER')
 IMAP_PORT = int(config('IMAP_PORT'))
 IMAP_USER = config('IMAP_USER')
 IMAP_PASS = config('IMAP_PASS')
-DB_HOST = config('DB_HOST')
-DB_USER = config('DB_USER')
-DB_PASS = config('DB_PASS')
-DB_NAME = config('DB_NAME')
-
+API_ENDPOINT = config('API_ENDPOINT')
+API_KEY = config('API_KEY')
 
 nlp = en_core_web_sm.load()
 
@@ -34,7 +32,7 @@ def fetch_emails():
             result, email_data = mail.fetch(num, '(RFC822)')
             raw_email = email_data[0][1]
             email_message = message_from_bytes(raw_email)
-
+            date_received = email_message.get('Date')
             sender = email_message.get('From')
             subject = email_message.get('Subject')
 
@@ -58,20 +56,37 @@ def fetch_emails():
             yield {
                 'sender': sender,
                 'subject': subject,
-                'content': content
+                'content': content,
+                'date': date_received
             }
 
-def extract_email_info(email_text):
+def extract_email_info(email_text, email_date):
     doc = nlp(email_text)
 
     info = {
         'phone': '',
         'name': '',
         'company': '',
+        'notes': email_text,
         'country': '',
         'budget': '',
+        'website': '',
+        'day_of_lead': '',
+        'date': ''
     }
 
+    website_pattern = re.compile(r'https?://\S+')
+    website_match = website_pattern.search(email_text)
+    if website_match:
+        info['website'] = website_match.group(0)
+
+    try:
+        email_datetime = datetime.strptime(email_date, '%a, %d %b %Y %H:%M:%S %z')
+        info['day_of_lead'] = email_datetime.strftime('%A')
+        info['date'] = email_datetime.strftime('%Y-%m-%d')
+    except ValueError:
+        logging.error(f"Failed to parse email date: {email_date}")
+    
     for ent in doc.ents:
         if ent.label_ == 'CARDINAL' and "k" in ent.text.lower():
             info['budget'] = ent.text
@@ -82,40 +97,46 @@ def extract_email_info(email_text):
         elif ent.label_ == 'GPE' and not info['country']:
             info['country'] = ent.text
 
+    if ' ' in info['name']:
+        info['first_name'], info['last_name'] = info['name'].split(' ', 1)
+    else:
+        info['first_name'] = info['name']
+        info['last_name'] = ''
     phone_pattern = re.compile(r'\+\d{1,3} \d{7,10}')
     phone_match = phone_pattern.search(email_text)
     if phone_match:
         info['phone'] = phone_match.group(0)
 
-    budget_pattern = re.compile(r'\d+k-\d+k')
+    budget_pattern = re.compile(r'(\d+k\s*-\s*\d+k\s*[A-Z]{3}|\d+k\s*[A-Z]{3})')
     budget_match = budget_pattern.search(email_text)
     if budget_match:
         info['budget'] = budget_match.group(0)
 
     return info
 
-def store_to_db(data):
-    try:
-        conn = mysql.connector.connect(
-            host=DB_HOST,
-            user=DB_USER,
-            password=DB_PASS,
-            database=DB_NAME
-        )
-
-        cursor = conn.cursor()
-
-        insert_query = """
-        INSERT INTO emails (phone, email, name, company, country, budget, subject)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(insert_query, (data['phone'], data['sender'], data['name'], data['company'], data['country'], data['budget'], data['subject']))
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-    except mysql.connector.Error as e:
-        logging.error(f"Database error: {str(e)}")
+def send_to_api(data):
+    payload = {
+        'form': {
+            'name': 'Email Lead',
+            'company_name': data['company'],
+            'first_name': data['first_name'],
+            'last_name': data['last_name'],
+            'full_name': data['name'],
+            'email': data['sender'],
+            'phone': data['phone'],
+            'notes': data['notes'],
+            'website': data['website'],
+            'communication': 'Email AI',
+            'day_of_lead': data['day_of_lead'],
+            'date': data['date'],
+            'progress_stage': 'Lead Open',
+            'budget': data['budget']
+        },
+        'api_key': API_KEY
+    }
+    response = requests.post(API_ENDPOINT, json=payload)
+    if response.status_code != 200:
+        logging.error(f"API error: {response.text}")
 
 @app.route('/parse-emails', methods=['POST'])
 def parse_emails():
@@ -123,13 +144,13 @@ def parse_emails():
     results = []
     for email_data in email_data_list:
         clean_data = email_data['content'].replace('\r\n', ' ')
-        data = extract_email_info(clean_data)
+        data = extract_email_info(clean_data, email_data.get('date', ''))
         data['sender'] = email_data['sender']
         data['subject'] = email_data['subject']
         results.append(data)
-        store_to_db(data)
+        send_to_api(data)
 
-    return jsonify(results) 
+    return jsonify(results)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000) 
+    app.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,2 +1,4 @@
 .env
 myenv/
+libs/
+email_processing.log
