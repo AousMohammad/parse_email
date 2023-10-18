@@ -19,6 +19,7 @@ IMAP_USER = config('IMAP_USER')
 IMAP_PASS = config('IMAP_PASS')
 API_ENDPOINT = config('API_ENDPOINT')
 API_KEY = config('API_KEY')
+WHITELIST_EMAIL = config('WHITELIST_EMAIL')
 
 nlp = en_core_web_sm.load()
 
@@ -40,6 +41,8 @@ def fetch_emails():
             email_match = re.search(r'<([^>]+)>', sender)
             if email_match:
                 sender = email_match.group(1)
+            if sender != WHITELIST_EMAIL:
+                continue
             if email_message.is_multipart():
                 for part in email_message.walk():
                     content_type = part.get_content_type()
@@ -153,4 +156,4 @@ def parse_emails():
     return jsonify(results)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000)
